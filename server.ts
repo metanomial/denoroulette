@@ -1,34 +1,45 @@
-import { serve } from "https://deno.land/std/http/server.ts";
+const scripts: string[] = [
+  'animalfacts',
+  'beemovie',
+  'obliviate',
+  'poet'
+]
 
-const decoder = new TextDecoder("utf-8");
-const indexHtml = decoder.decode(Deno.readFileSync("index.html"));
-const scripts: string[] = [];
-for (const dirEntry of Deno.readDirSync("scripts")) {
-	if(dirEntry.isFile) {
-		scripts.push(decoder.decode(Deno.readFileSync(`scripts/${ dirEntry.name }`)));
-	}
+function randomScript (): string {
+  const index = Math.floor(Math.random() * scripts.length)
+  return scripts[index]
 }
 
-const typescriptHeaders = new Headers;
-typescriptHeaders.append("Content-Type", "application/typescript");
-
-const server = serve({ port: 8000 });
-for await (const request of server) {
-	console.log(new Date().getTime(), request.method, request.url);
-	if(request.method == "GET") switch(request.url) {
-		case "/":
-		case "/index.html":
-			request.respond({ body: indexHtml });
-			break;
-		case "/random.ts":
-			const randomScript = scripts[Math.floor(Math.random() * scripts.length)];
-			request.respond({
-				headers: typescriptHeaders,
-				body: randomScript
-			});
-			break;
-		default:
-			request.respond({ status: 404 });
-	}
-	else request.respond({ status: 405 });
+async function handleRequest (request: Request): Promise<Response> {
+  if (request.method != 'GET')
+    return new Response(null, { status: 405 })
+  const { pathname } = new URL(request.url)
+  switch (pathname) {
+    case '/':
+    case '/index.html': {
+      const url = new URL('public/index.html', import.meta.url)
+      const response = await fetch(url)
+      response.headers.set('Content-Type', 'text/html; charset=utf-8')
+      return response
+    }
+    case '/main.css': {
+      const url = new URL('public/main.css', import.meta.url)
+      const response = await fetch(url)
+      response.headers.set('Content-Type', 'text/css; charset=utf-8')
+      return response
+    }
+    case '/random.ts': {
+      const script = randomScript()
+      const url = new URL(`scripts/${script}.ts`, import.meta.url)
+      const response = await fetch(url)
+      response.headers.set('Content-Type', 'application/typescript; charset=utf-8')
+      return response
+    }
+    default:
+      return new Response(null, { status: 404 })
+  }
 }
+
+addEventListener('fetch', (event: FetchEvent) => {
+  event.respondWith(handleRequest(event.request))
+})
